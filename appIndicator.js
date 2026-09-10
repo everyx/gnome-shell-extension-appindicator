@@ -817,8 +817,18 @@ export class AppIndicator extends Signals.EventEmitter {
 
     _getActivationToken(timestamp) {
         const launchContext = global.create_app_launch_context(timestamp, -1);
-        return [launchContext, launchContext.get_startup_notify_id(
-            this._appInfo ?? this._fakeAppInfo, [])];
+        // Tray interactions are action activations, not cold launches: they
+        // may never activate a window (e.g. "Quit"). Passing appInfo makes
+        // Mutter create a startup sequence with an application-id, which is
+        // then treated as pending until timeout, showing the global wait
+        // cursor (see issue #443). Passing null generates an anonymous
+        // token that still activates windows via xdg-activation without
+        // ever triggering the busy cursor (cf. gnome-shell!4325).
+        // NULL appInfo segfaults Mutter < 49 (fixed upstream by mutter!4705,
+        // only partially backported to 48.x), so keep the old behavior there.
+        const appInfo = Util.versionCheck(49)
+            ? null : this._appInfo ?? this._fakeAppInfo;
+        return [launchContext, launchContext.get_startup_notify_id(appInfo, [])];
     }
 
     async provideActivationToken(timestamp) {
